@@ -1,0 +1,110 @@
+This is an agent-based model simulating how fake news affects investment decisions related to climate
+  change. Here's what it does:
+
+  Agents:
+
+  - 50 Individual Investors: Start with random beliefs about climate risk (0 = denier, 1 = strong
+  believer)
+    - Their portfolio allocation follows their beliefs (higher belief → more "Green" investments, less
+  "Fossil")
+    - They're susceptible to fake news to varying degrees
+  - 10 Institutional Investors: Follow market sentiment (the average belief of individuals)
+    - They adjust portfolios based on what the crowd thinks
+
+  Simulation Process:
+
+  Each step:
+  1. News injection: With 10% probability, news is broadcasted
+    - 50% chance it's "fake denial" news (decreases climate risk belief)
+    - 50% chance it's "real climate" news (increases belief)
+  2. Belief updates: Individual investors update their beliefs based on news
+  3. Portfolio reallocation: All agents adjust their Green vs Fossil holdings
+  4. Data collection: Tracks average beliefs, portfolio allocations, and market sentiment
+
+  What you saw:
+
+  The beliefs stayed constant (0.518447) across all 20 steps, which suggests either:
+  - No news was injected during those 20 steps (10% chance per step is fairly low)
+  - The news impact was too small to significantly move the average
+
+  The model demonstrates how misinformation can influence investment markets and capital flows between
+  green/fossil fuel assets. Would you like to run it with more steps or higher news injection rates to see
+   more dynamic behavior?
+
+
+
+
+
+FAKE NEWS
+
+
+  How Fake News Enters the Model
+
+  Step 1: News Injection (model.py:146-155)
+
+  Each timestep, the model decides whether to inject news:
+
+  if random.random() < self.news_injection_rate:  # 30% chance per step
+      news_strength = random.uniform(0.05, 0.15)  # Random strength 5-15%
+
+      if random.random() < self.fake_news_proportion:  # 50% of news is fake
+          news_type = "fake_denial"  # Fake news denying climate risk
+      else:
+          news_type = "real_climate"  # Real news about climate risk
+
+      # Broadcast to all individual investors
+      for agent in self.agents:
+          if isinstance(agent, IndividualInvestor):
+              self.current_news[id(agent)] = (news_type, news_strength)
+
+  Example: At step 5, there's a 30% chance news appears. If it does, there's a 50% chance it's
+  "fake_denial" with strength 0.12
+
+  Step 2: Individual Investors Process News (agents.py:57-70)
+
+  Each individual investor checks if they received news and updates their belief:
+
+  Fake News ("fake_denial") - DECREASES belief:
+
+  change = news_strength * susceptibility * (1 - current_belief)
+  new_belief = current_belief - change
+
+  Example:
+  - Agent has belief = 0.6 (60% believes climate is risky)
+  - News strength = 0.12
+  - Susceptibility = 0.8 (very susceptible to misinformation)
+  - Change = 0.12 × 0.8 × (1 - 0.6) = 0.0384
+  - New belief = 0.6 - 0.0384 = 0.5616 ⬇️
+
+  Real News ("real_climate") - INCREASES belief:
+
+  change = news_strength * (1 - susceptibility) * current_belief
+  new_belief = current_belief + change
+
+  Example:
+  - Agent has belief = 0.4
+  - News strength = 0.10
+  - Susceptibility = 0.3 (less susceptible = more receptive to real news)
+  - Change = 0.10 × (1 - 0.3) × 0.4 = 0.028
+  - New belief = 0.4 + 0.028 = 0.428 ⬆️
+
+  Step 3: Portfolio Reallocation (agents.py:73-83)
+
+  Beliefs directly translate to portfolio:
+  portfolio['Green'] = belief_climate_risk
+  portfolio['Fossil'] = 1.0 - belief_climate_risk
+
+  Key Insights:
+
+  1. Higher susceptibility = more affected by fake news, less by real news
+  2. News strength varies randomly (5-15%), so impact differs each time
+  3. Institutional investors don't receive news directly - they just follow the average belief of
+  individuals
+  4. Only 30% of steps have news, so many steps show no change
+
+  Why the graphs show gradual decline:
+
+  Looking at your simulation, beliefs declined from ~0.52 to ~0.51 because:
+  - 30% chance × 50% fake = 15% of steps had fake news
+  - 30% chance × 50% real = 15% of steps had real news
+  - The fake news slightly outweighed real news due to random variation

@@ -1,4 +1,5 @@
 import mesa
+from mesa.agent import AgentSet
 import random
 import numpy as np
 
@@ -42,7 +43,6 @@ class FakeNewsInvestmentModel(mesa.Model):
         self.num_individual_agents = n_individual
         self.num_institutional_agents = n_institutional
         self.total_agents = n_individual + n_institutional
-        self.schedule = mesa.time.RandomActivation(self)  # Use the imported class
 
         # Store parameters
         self.initial_belief_dist = initial_belief_distribution
@@ -53,21 +53,16 @@ class FakeNewsInvestmentModel(mesa.Model):
         self.fake_news_proportion = fake_news_proportion
         self.current_news = {}  # News present in this step {agent_id: (type, strength)}
 
-        # Create agents
-        agent_id_counter = 0
+        # Create agents (auto-registered with model in Mesa 3.x)
         for i in range(self.num_individual_agents):
             belief = self._get_initial_value(self.initial_belief_dist)
             susceptibility = self._get_initial_value(self.misinfo_sus_dist)
-            agent = IndividualInvestor(agent_id_counter, self, belief, susceptibility)
-            self.schedule.add(agent)
-            agent_id_counter += 1
+            IndividualInvestor(self, belief, susceptibility)
 
         for i in range(self.num_institutional_agents):
             sensitivity = self._get_initial_value(self.sentiment_sens_dist)
             # Institutional agents start with neutral belief/portfolio
-            agent = InstitutionalInvestor(agent_id_counter, self, sensitivity)
-            self.schedule.add(agent)
-            agent_id_counter += 1
+            InstitutionalInvestor(self, sensitivity)
 
         # Data collection
         self.datacollector = mesa.DataCollector(
@@ -75,42 +70,42 @@ class FakeNewsInvestmentModel(mesa.Model):
                 "AvgBelief_Individual": lambda m: np.mean(
                     [
                         a.belief_climate_risk
-                        for a in m.schedule.agents
+                        for a in m.agents
                         if isinstance(a, IndividualInvestor)
                     ]
                 ),
                 "AvgBelief_Institutional": lambda m: np.mean(
                     [
                         a.belief_climate_risk
-                        for a in m.schedule.agents
+                        for a in m.agents
                         if isinstance(a, InstitutionalInvestor)
                     ]
                 ),
                 "AvgPortfolioGreen_Individual": lambda m: np.mean(
                     [
                         a.portfolio.get("Green", 0)
-                        for a in m.schedule.agents
+                        for a in m.agents
                         if isinstance(a, IndividualInvestor)
                     ]
                 ),
                 "AvgPortfolioFossil_Individual": lambda m: np.mean(
                     [
                         a.portfolio.get("Fossil", 0)
-                        for a in m.schedule.agents
+                        for a in m.agents
                         if isinstance(a, IndividualInvestor)
                     ]
                 ),
                 "AvgPortfolioGreen_Institutional": lambda m: np.mean(
                     [
                         a.portfolio.get("Green", 0)
-                        for a in m.schedule.agents
+                        for a in m.agents
                         if isinstance(a, InstitutionalInvestor)
                     ]
                 ),
                 "AvgPortfolioFossil_Institutional": lambda m: np.mean(
                     [
                         a.portfolio.get("Fossil", 0)
-                        for a in m.schedule.agents
+                        for a in m.agents
                         if isinstance(a, InstitutionalInvestor)
                     ]
                 ),
@@ -155,9 +150,9 @@ class FakeNewsInvestmentModel(mesa.Model):
 
             # Simplistic: broadcast to all individuals for now
             # Future: Use network structure
-            for agent in self.schedule.agents:
+            for agent in self.agents:
                 if isinstance(agent, IndividualInvestor):
-                    self.current_news[agent.unique_id] = (news_type, news_strength)
+                    self.current_news[id(agent)] = (news_type, news_strength)
 
     def get_news_for_agent(self, agent_id):
         """Provide news relevant to the agent for this step."""
@@ -167,7 +162,7 @@ class FakeNewsInvestmentModel(mesa.Model):
         """Calculate the overall market sentiment (e.g., average individual belief)."""
         individual_beliefs = [
             a.belief_climate_risk
-            for a in self.schedule.agents
+            for a in self.agents
             if isinstance(a, IndividualInvestor)
         ]
         if not individual_beliefs:
@@ -177,7 +172,7 @@ class FakeNewsInvestmentModel(mesa.Model):
     def step(self):
         """Advance the model by one step."""
         self._inject_news()  # Determine news for this step
-        self.schedule.step()  # Agents update beliefs, allocate portfolios
+        self.agents.shuffle_do("step")  # Agents update beliefs, allocate portfolios
         # Future: Add market price updates based on aggregate demand/supply
         # Future: Add agent wealth updates based on asset performance
         self.datacollector.collect(self)  # Collect data
@@ -190,21 +185,29 @@ class FakeNewsInvestmentModel(mesa.Model):
 
 # Example usage:
 if __name__ == "__main__":
+    import os
+    from datetime import datetime
+
     print("--- Script execution started ---")
     N_INDIVIDUAL = 50
     N_INSTITUTIONAL = 10
-    N_STEPS = 20
+    N_STEPS = 100
+    NEWS_INJECTION_RATE = 0.3  # 30% chance per step
+    FAKE_NEWS_PROPORTION = 0.5  # 50% of news is fake
 
     model = FakeNewsInvestmentModel(
         n_individual=N_INDIVIDUAL,
         n_institutional=N_INSTITUTIONAL,
-        # Add other parameters if needed, defaults are used otherwise
+        news_injection_rate=NEWS_INJECTION_RATE,
+        fake_news_proportion=FAKE_NEWS_PROPORTION,
     )
 
     print(
         f"Running model with {N_INDIVIDUAL} individual and "
         f"{N_INSTITUTIONAL} institutional agents for {N_STEPS} steps..."
     )
+    print(f"News injection rate: {NEWS_INJECTION_RATE*100}%")
+    print(f"Fake news proportion: {FAKE_NEWS_PROPORTION*100}%")
 
     model.run_model(n_steps=N_STEPS)
 
@@ -217,17 +220,30 @@ if __name__ == "__main__":
     print("\nModel-level data (last 5 steps):")
     print(model_data.tail())
 
-    # Get agent-level data (can be large)
-    # agent_data = model.datacollector.get_agent_vars_dataframe()
-    # print("\nAgent-level data (showing data for agent 0):")
-    # try:
-    #     print(agent_data.loc[0].head()) # Show first 5 steps for agent 0
-    # except KeyError:
-    #     print("Agent 0 data not found (maybe fewer agents than expected).")
+    # Get agent-level data
+    agent_data = model.datacollector.get_agent_vars_dataframe()
+    print(f"\nAgent-level data shape: {agent_data.shape}")
 
-    print("\nBasic model structure is ready.")
-    print("Next steps could involve:")
-    print("- Implementing network structures for news diffusion.")
-    print("- Adding market price dynamics and wealth updates.")
-    print("- Creating a visualization using Mesa's server.")
-    print("- Running experiments with different parameters.")
+    # Create output directory
+    output_dir = "simulation_results"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Generate timestamp for unique filenames
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Save data to CSV files
+    model_csv = f"{output_dir}/model_data_{timestamp}.csv"
+    agent_csv = f"{output_dir}/agent_data_{timestamp}.csv"
+
+    model_data.to_csv(model_csv)
+    agent_data.to_csv(agent_csv)
+
+    print(f"\n✓ Data saved successfully!")
+    print(f"  - Model data: {model_csv}")
+    print(f"  - Agent data: {agent_csv}")
+
+    print("\nNext steps you can try:")
+    print("- Adjust news_injection_rate and fake_news_proportion parameters")
+    print("- Visualize the data using matplotlib or seaborn")
+    print("- Run multiple simulations to compare outcomes")
+    print("- Implement network structures for news diffusion")

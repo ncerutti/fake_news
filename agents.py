@@ -3,8 +3,8 @@ import mesa
 
 class InvestorAgent(mesa.Agent):
     """Base class for all investor agents."""
-    def __init__(self, unique_id, model, initial_belief, initial_portfolio):
-        super().__init__(unique_id, model)
+    def __init__(self, model, initial_belief, initial_portfolio):
+        super().__init__(model)
         # Belief about climate change risk (0: Denier, 1: Strong Believer)
         self.belief_climate_risk = initial_belief
         # Portfolio allocation {'Green': fraction, 'Fossil': fraction}
@@ -35,15 +35,14 @@ class InvestorAgent(mesa.Agent):
 
 class IndividualInvestor(InvestorAgent):
     """Represents an individual investor whose decisions are belief-driven."""
-    def __init__(self, unique_id, model, initial_belief,
-                 susceptibility_to_misinfo):
+    def __init__(self, model, initial_belief, susceptibility_to_misinfo):
         # Initial portfolio allocation based on belief
         # Simple example: more belief -> more green
         initial_portfolio = {
             'Green': initial_belief,
             'Fossil': 1.0 - initial_belief
         }
-        super().__init__(unique_id, model, initial_belief, initial_portfolio)
+        super().__init__(model, initial_belief, initial_portfolio)
         # How easily swayed by fake news (0 to 1)
         self.susceptibility = susceptibility_to_misinfo
 
@@ -53,7 +52,7 @@ class IndividualInvestor(InvestorAgent):
         """
         # Example: Check for news in the model environment
         news_type, news_strength = \
-            self.model.get_news_for_agent(self.unique_id)
+            self.model.get_news_for_agent(id(self))
 
         if news_type == "fake_denial":
             # Decrease belief, influenced by susceptibility
@@ -85,11 +84,11 @@ class IndividualInvestor(InvestorAgent):
 
 class InstitutionalInvestor(InvestorAgent):
     """Represents an institutional investor influenced by market sentiment."""
-    def __init__(self, unique_id, model, sentiment_sensitivity):
+    def __init__(self, model, sentiment_sensitivity):
         # Institutions might start neutral or follow initial market average
         initial_belief = 0.5  # Start neutral
         initial_portfolio = {'Green': 0.5, 'Fossil': 0.5}
-        super().__init__(unique_id, model, initial_belief, initial_portfolio)
+        super().__init__(model, initial_belief, initial_portfolio)
         # How much they follow the crowd (0 to 1)
         self.sentiment_sensitivity = sentiment_sensitivity
 
