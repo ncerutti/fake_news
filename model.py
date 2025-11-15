@@ -183,17 +183,16 @@ class FakeNewsInvestmentModel(mesa.Model):
             self.step()
 
 
-# Example usage:
 if __name__ == "__main__":
     import os
     from datetime import datetime
 
     print("--- Script execution started ---")
-    N_INDIVIDUAL = 50
-    N_INSTITUTIONAL = 10
+    N_INDIVIDUAL = 10
+    N_INSTITUTIONAL = 50
     N_STEPS = 100
-    NEWS_INJECTION_RATE = 0.3  # 30% chance per step
-    FAKE_NEWS_PROPORTION = 0.5  # 50% of news is fake
+    NEWS_INJECTION_RATE = 0.75
+    FAKE_NEWS_PROPORTION = 0.25
 
     model = FakeNewsInvestmentModel(
         n_individual=N_INDIVIDUAL,
